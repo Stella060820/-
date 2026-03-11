@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>仓库库存管理系统</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <div>
+        <h1>仓库库存管理</h1>
+        <p class="subtitle">本地运行 · 自动统计 · 库存预警</p>
+      </div>
+      <div class="header-actions">
+        <button id="export-data-btn" class="btn ghost">导出数据（Excel）</button>
+        <button id="import-data-btn" class="btn ghost">导入数据（Excel / JSON）</button>
+        <input type="file" id="import-file-input" accept=".json,.xlsx,.xls" hidden />
+      </div>
+    </header>
+
+    <main class="app-main">
+      <section class="panel">
+        <div class="panel-header">
+          <h2>产品与库存</h2>
+          <button id="add-product-btn" class="btn primary">新增产品</button>
+        </div>
+
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>产品型号</th>
+                <th>供应商</th>
+                <th>库存数量</th>
+                <th>最低库存</th>
+                <th>状态</th>
+                <th style="width: 120px;">操作</th>
+              </tr>
+            </thead>
+            <tbody id="product-table-body">
+              <!-- 动态填充 -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="layout-two-columns">
+        <div class="panel">
+          <div class="panel-header">
+            <h2>发货登记</h2>
+          </div>
+          <form id="shipment-form" class="form-grid">
+            <label>
+              产品型号
+              <select id="shipment-product" required>
+                <option value="">请选择产品</option>
+              </select>
+            </label>
+            <label>
+              发货数量
+              <input id="shipment-quantity" type="number" min="1" required />
+            </label>
+            <label>
+              发货日期
+              <input id="shipment-date" type="date" required />
+            </label>
+            <label>
+              客户简称
+              <input id="shipment-customer" type="text" placeholder="例如：某某电子" required />
+            </label>
+            <label>
+              使用项目
+              <select id="shipment-project" required>
+                <option value="AS">AS</option>
+                <option value="RS">RS</option>
+              </select>
+            </label>
+            <div class="form-actions">
+              <button type="submit" class="btn primary">确认发货并生成送货单</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">
+            <h2>送货单</h2>
+            <div class="panel-controls">
+              <button id="print-delivery-btn" class="btn ghost">打印 / PDF</button>
+              <button id="export-delivery-excel-btn" class="btn ghost">导出送货单（Excel）</button>
+            </div>
+          </div>
+          <div id="delivery-note" class="delivery-note">
+            <div class="delivery-note-header">
+              <h3>上海创亚纸业送货单</h3>
+            </div>
+            <div class="delivery-note-meta">
+              <div class="meta-row">
+                <span>单号：<span id="delivery-order-no">—</span></span>
+                <span>客户订单号：<span id="delivery-customer-order-no">—</span></span>
+                <span>客户简称：<span id="delivery-customer-name">—</span></span>
+                <span>使用项目：<span id="delivery-project">—</span></span>
+              </div>
+              <div class="meta-row">
+                <span>发货员：<span id="delivery-shipper">—</span></span>
+                <span>车牌：<span id="delivery-car-plate">—</span></span>
+                <span>送货日期：<span id="delivery-date-display">—</span></span>
+              </div>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 60px;">序号</th>
+                  <th>客户物料号（产品型号）</th>
+                  <th>品名</th>
+                  <th style="width: 80px;">数量</th>
+                </tr>
+              </thead>
+              <tbody id="delivery-items-body">
+                <tr>
+                  <td colspan="4" class="placeholder">暂无送货记录</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>月度需求趋势分析</h2>
+          <div class="panel-controls">
+            <label class="inline-label">
+              选择月份
+              <input id="analysis-month" type="month" />
+            </label>
+            <button id="refresh-analysis-btn" class="btn ghost">刷新</button>
+          </div>
+        </div>
+        <div class="chart-container">
+          <canvas id="demand-chart"></canvas>
+        </div>
+      </section>
+    </main>
+
+    <footer class="app-footer">
+      <span>数据保存在浏览器本地，不会上传服务器。</span>
+    </footer>
+  </div>
+
+  <!-- 产品编辑弹窗 -->
+  <div id="product-modal-backdrop" class="modal-backdrop hidden">
+    <div class="modal">
+      <h2 id="product-modal-title">新增产品</h2>
+      <form id="product-form" class="form-grid">
+        <label>
+          产品型号
+          <input id="product-model" type="text" required />
+        </label>
+        <label>
+          供应商
+          <input id="product-vendor" type="text" required />
+        </label>
+        <label>
+          当前库存数量
+          <input id="product-stock" type="number" min="0" value="0" required />
+        </label>
+        <label>
+          最低库存提醒值
+          <input id="product-min-stock" type="number" min="0" value="0" required />
+        </label>
+        <div class="form-actions">
+          <button type="button" id="product-cancel-btn" class="btn ghost">取消</button>
+          <button type="submit" class="btn primary">保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 简单弹窗提醒 -->
+  <div id="alert-toast" class="toast hidden"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
+
